@@ -14,9 +14,9 @@ window.CHACOUNETTE = {
   appli: {
     // Adresse de téléchargement de l'app (lien App Store ou TestFlight).
     // Tant qu'elle est vide, le pop-up ne s'affiche pas.
-    lien: "",
+    lien: "https://github.com/chacounette07/ChacounetteApp",
     // Secondes avant l'apparition du pop-up
-    delaiSecondes: 4,
+    delaiSecondes: 6,
     // Jours avant qu'il reparaisse après « Plus tard »
     rappelJours: 7
   },
