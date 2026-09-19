@@ -150,6 +150,8 @@
   }
   .tile.wide { grid-column: 1 / -1; min-height: 400px; }
   .tile.photo { position: relative; overflow: hidden; color: #fff; border-color: transparent; min-height: 480px; }
+  .tile.photo:not(.wide) { min-height: 400px; }
+  .tile.photo:not(.wide)::before { background: linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.62) 38%, rgba(0,0,0,0) 74%); }
   .tile.photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 60% 25%; }
   .tile.photo::before {
     content: ""; position: absolute; inset: 0; z-index: 1;
@@ -165,6 +167,7 @@
     .grid { grid-template-columns: 1fr; }
     .tile, .tile.wide { min-height: 280px; padding: 32px 26px; }
     .tile.photo { min-height: 340px; }
+    .tile.photo:not(.wide) { min-height: 340px; }
   }
 
   /* Fiche technique */
@@ -324,13 +327,15 @@
           <h3>Sieste. Jusqu’à 16 heures d’autonomie.</h3>
           <p>Sur un genou, de préférence. Recharge complète, sans câble.</p>
         </article>
-        <article class="tile">
+        <article class="tile photo">
+          <img src="IMG_0358.jpeg" alt="Chacounette les yeux fermés, blottie dans une couette bleu-vert" style="object-position: 50% 35%" width="1800" height="1350" loading="lazy" decoding="async">
           <h3>Silence.</h3>
           <p>Aucun ronron, même sous les caresses. Elle garde ça pour elle.</p>
         </article>
-        <article class="tile">
+        <article class="tile photo">
+          <img src="IMG_0019.jpeg" alt="Chacounette debout sur ses pattes arrière, les pattes sur un volet, qui surveille dehors" style="object-position: 50% 31%" width="1200" height="1600" loading="lazy" decoding="async">
           <h3>Chasse.</h3>
-          <p>Souris en peluche, bouts de ficelle et pieds sous la couette. Aucune proie n’est à l’abri.</p>
+          <p>Souris en peluche, bouts de ficelle et tout ce qui bouge dehors. Aucune proie n’est à l’abri.</p>
         </article>
       </div>
       <p class="more"><a class="link" href="galerie.html">Voir toutes les photos</a></p>
