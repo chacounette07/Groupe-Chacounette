@@ -375,13 +375,27 @@
       if (e.key === 'ArrowLeft') show(i - 1);
       if (e.key === 'ArrowRight') show(i + 1);
     });
-    inner.addEventListener('touchstart', function (e) { startX = e.changedTouches[0].clientX; }, { passive: true });
-    inner.addEventListener('touchend', function (e) {
-      if (startX === null) return;
-      var dx = e.changedTouches[0].clientX - startX;
-      startX = null;
-      if (Math.abs(dx) > 50) show(dx < 0 ? i + 1 : i - 1);
+    // Balayage à un doigt pour changer de photo.
+    // Les gestes à deux doigts (zoom) et les déplacements sur une page zoomée sont ignorés.
+    var startY = 0;
+    var multi = false;
+    inner.addEventListener('touchstart', function (e) {
+      if (e.touches.length > 1) { multi = true; startX = null; return; }
+      if (!multi) { startX = e.touches[0].clientX; startY = e.touches[0].clientY; }
     }, { passive: true });
+    inner.addEventListener('touchend', function (e) {
+      if (e.touches.length > 0) return;          // il reste un doigt posé : le geste n'est pas fini
+      var wasMulti = multi;
+      multi = false;
+      var sx = startX;
+      startX = null;
+      if (wasMulti || sx === null) return;
+      if (window.visualViewport && window.visualViewport.scale > 1.05) return;
+      var dx = e.changedTouches[0].clientX - sx;
+      var dy = e.changedTouches[0].clientY - startY;
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) show(dx < 0 ? i + 1 : i - 1);
+    }, { passive: true });
+    inner.addEventListener('touchcancel', function () { startX = null; multi = false; }, { passive: true });
   })();
 </script>
 
