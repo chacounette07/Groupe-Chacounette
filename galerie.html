@@ -217,27 +217,44 @@
     background: transparent; color: #f5f5f7;
   }
   .lightbox::backdrop { background: rgba(0, 0, 0, 0.9); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
-  .lb-inner {
-    position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 14px; padding: calc(64px + env(safe-area-inset-top)) 72px calc(28px + env(safe-area-inset-bottom));
+  .lb-inner { position: fixed; inset: 0; }
+  /* Couche de la photo : c'est elle (et elle seule) qui zoome et se déplace */
+  .lb-stage {
+    position: absolute; inset: 0; box-sizing: border-box; overflow: hidden; touch-action: none;
+    display: flex; align-items: center; justify-content: center;
+    padding: calc(64px + env(safe-area-inset-top)) 72px calc(90px + env(safe-area-inset-bottom));
+    -webkit-user-select: none; user-select: none;
   }
-  .lb-inner img { max-width: 100%; max-height: calc(100vh - 170px); width: auto; height: auto; object-fit: contain; border-radius: 16px; }
-  .lb-caption { font-size: 17px; text-align: center; color: #f5f5f7; min-height: 26px; }
+  .lb-stage img {
+    max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; border-radius: 16px;
+    will-change: transform; -webkit-user-drag: none; -webkit-touch-callout: none;
+  }
+  .lb-stage img.anim { transition: transform 0.28s ease; }
+  /* Interface : reste en place quel que soit le zoom */
+  .lb-caption {
+    position: absolute; left: 0; right: 0; bottom: calc(28px + env(safe-area-inset-bottom)); z-index: 2;
+    width: fit-content; max-width: calc(100% - 32px); margin: 0 auto; padding: 6px 16px; border-radius: 980px;
+    background: rgba(0, 0, 0, 0.5); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    font-size: 17px; text-align: center; color: #f5f5f7; pointer-events: none;
+  }
   .lb-btn {
-    position: absolute; width: 44px; height: 44px; border: 0; border-radius: 50%; cursor: pointer;
-    background: rgba(255, 255, 255, 0.14); color: #fff; font: inherit; font-size: 26px; line-height: 1;
+    position: absolute; z-index: 3; width: 44px; height: 44px; border: 0; border-radius: 50%; cursor: pointer;
+    background: rgba(0, 0, 0, 0.5); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    color: #fff; font: inherit; font-size: 26px; line-height: 1;
     display: flex; align-items: center; justify-content: center;
   }
-  .lb-btn:hover { background: rgba(255, 255, 255, 0.24); }
+  .lb-btn:hover { background: rgba(0, 0, 0, 0.7); }
   .lb-close { top: calc(16px + env(safe-area-inset-top)); right: 16px; }
   .lb-prev { left: 16px; top: 50%; margin-top: -22px; }
   .lb-next { right: 16px; top: 50%; margin-top: -22px; }
   @media (max-width: 600px) {
-    .lb-inner { padding: calc(64px + env(safe-area-inset-top)) 12px calc(84px + env(safe-area-inset-bottom)); }
+    .lb-stage { padding: calc(64px + env(safe-area-inset-top)) 12px calc(126px + env(safe-area-inset-bottom)); }
+    .lb-caption { bottom: calc(78px + env(safe-area-inset-bottom)); }
     .lb-prev, .lb-next { top: auto; bottom: calc(22px + env(safe-area-inset-bottom)); margin-top: 0; }
     .lb-prev { left: calc(50% - 56px); }
     .lb-next { right: calc(50% - 56px); }
   }
+  @media (prefers-reduced-motion: reduce) { .lb-stage img.anim { transition: none; } }
 
 
   /* Menu mobile plein écran */
@@ -332,10 +349,12 @@
 
 <dialog id="lightbox" class="lightbox" aria-label="Photo agrandie">
   <div class="lb-inner" id="lb-inner">
+    <div class="lb-stage" id="lb-stage">
+      <img id="lb-img" alt="" draggable="false">
+    </div>
+    <p class="lb-caption" id="lb-cap"></p>
     <button class="lb-btn lb-close" type="button" aria-label="Fermer">×</button>
     <button class="lb-btn lb-prev" type="button" aria-label="Photo précédente">‹</button>
-    <img id="lb-img" alt="">
-    <p class="lb-caption" id="lb-cap"></p>
     <button class="lb-btn lb-next" type="button" aria-label="Photo suivante">›</button>
   </div>
 </dialog>
@@ -346,13 +365,124 @@
   (function () {
     var shots = Array.prototype.slice.call(document.querySelectorAll('.shot'));
     var dlg = document.getElementById('lightbox');
-    var inner = document.getElementById('lb-inner');
+    var stage = document.getElementById('lb-stage');
     var img = document.getElementById('lb-img');
     var cap = document.getElementById('lb-cap');
     var i = 0;
-    var startX = null;
 
+    // ---- Zoom et déplacement de la PHOTO uniquement (croix, flèches et légende ne bougent pas) ----
+    var MAX = 5;
+    var scale = 1, tx = 0, ty = 0;
+    var pointers = new Map();
+    var g = null;          // geste en cours
+    var lastTap = 0;
+
+    function apply() { img.style.transform = 'translate(' + tx + 'px, ' + ty + 'px) scale(' + scale + ')'; }
+    function resetZoom() {
+      scale = 1; tx = 0; ty = 0; g = null; pointers.clear();
+      img.classList.remove('anim');
+      img.style.transform = '';
+    }
+    // Centre de la photo (sans zoom), par rapport à la couche
+    function base() { return { x: img.offsetLeft + img.offsetWidth / 2, y: img.offsetTop + img.offsetHeight / 2 }; }
+    function rel(x, y) { var o = stage.getBoundingClientRect(); return { x: x - o.left, y: y - o.top }; }
+    function clampScale(v) { return Math.max(1, Math.min(MAX, v)); }
+    // Empêche de sortir la photo de l'écran
+    function limit() {
+      var b = base();
+      var w = img.offsetWidth * scale, h = img.offsetHeight * scale;
+      var sw = stage.clientWidth, sh = stage.clientHeight;
+      tx = w <= sw ? 0 : Math.min(w / 2 - b.x, Math.max(sw - w / 2 - b.x, tx));
+      ty = h <= sh ? 0 : Math.min(h / 2 - b.y, Math.max(sh - h / 2 - b.y, ty));
+    }
+    // Zoome en gardant sous les doigts le point de la photo qui était touché
+    function place(m0, m1, s2, s0, tx0, ty0) {
+      var b = base();
+      var ux = (m0.x - b.x - tx0) / s0, uy = (m0.y - b.y - ty0) / s0;
+      scale = s2;
+      tx = m1.x - ux * s2 - b.x;
+      ty = m1.y - uy * s2 - b.y;
+      if (scale < 1.02) { scale = 1; tx = 0; ty = 0; }
+      limit();
+      apply();
+    }
+    function twoPoints() {
+      var a = Array.from(pointers.values());
+      var p = rel(a[0].x, a[0].y), q = rel(a[1].x, a[1].y);
+      return { d: Math.hypot(p.x - q.x, p.y - q.y) || 1, m: { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 } };
+    }
+    function toggleZoom(x, y) {
+      img.classList.add('anim');
+      var m = rel(x, y);
+      if (scale > 1.01) { scale = 1; tx = 0; ty = 0; apply(); }
+      else { place(m, m, 2.5, 1, 0, 0); }
+      setTimeout(function () { img.classList.remove('anim'); }, 320);
+    }
+
+    stage.addEventListener('pointerdown', function (e) {
+      try { stage.setPointerCapture(e.pointerId); } catch (err) {}
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      img.classList.remove('anim');
+      if (pointers.size === 1) {
+        g = { moved: false, multi: false, sx: e.clientX, sy: e.clientY, tx0: tx, ty0: ty, onStage: e.target === stage, pinch: null };
+      } else if (pointers.size === 2 && g) {
+        var tp = twoPoints();
+        g.multi = true;
+        g.pinch = { d: tp.d, m: tp.m, s: scale, tx: tx, ty: ty };
+      }
+    });
+
+    stage.addEventListener('pointermove', function (e) {
+      if (!g || !pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 2 && g.pinch) {
+        var tp = twoPoints();
+        place(g.pinch.m, tp.m, clampScale(g.pinch.s * tp.d / g.pinch.d), g.pinch.s, g.pinch.tx, g.pinch.ty);
+      } else if (pointers.size === 1 && !g.multi) {
+        var dx = e.clientX - g.sx, dy = e.clientY - g.sy;
+        if (Math.abs(dx) > 8 || Math.abs(dy) > 8) g.moved = true;
+        if (scale > 1.01) { tx = g.tx0 + dx; ty = g.ty0 + dy; limit(); apply(); }
+      }
+    });
+
+    function endPointer(e) {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.delete(e.pointerId);
+      if (pointers.size > 0) { if (g && pointers.size < 2) g.pinch = null; return; }
+      var gesture = g;
+      g = null;
+      if (!gesture || e.type === 'pointercancel') return;
+      if (scale < 1.02) { scale = 1; tx = 0; ty = 0; apply(); }
+      if (gesture.multi) return;                                   // fin d'un pincement : rien d'autre
+      if (!gesture.moved) {                                        // simple appui
+        var now = Date.now();
+        if (now - lastTap < 300) { lastTap = 0; toggleZoom(e.clientX, e.clientY); return; }
+        lastTap = now;
+        if (gesture.onStage && scale === 1) dlg.close();           // appui sur le fond : fermer
+        return;
+      }
+      var dx = e.clientX - gesture.sx, dy = e.clientY - gesture.sy;
+      if (scale === 1 && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) show(dx < 0 ? i + 1 : i - 1);
+    }
+    stage.addEventListener('pointerup', endPointer);
+    stage.addEventListener('pointercancel', endPointer);
+
+    // Souris / pavé tactile d'ordinateur
+    stage.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      var m = rel(e.clientX, e.clientY);
+      place(m, m, clampScale(scale * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.002))), scale, tx, ty);
+    }, { passive: false });
+
+    // Empêche Safari de zoomer la page pendant un pincement sur la photo
+    ['gesturestart', 'gesturechange', 'gestureend'].forEach(function (name) {
+      stage.addEventListener(name, function (e) { e.preventDefault(); });
+    });
+    window.addEventListener('resize', function () { if (dlg.open) { limit(); apply(); } });
+
+    // ---- Navigation ----
     function show(n) {
+      resetZoom();
       i = (n + shots.length) % shots.length;
       var t = shots[i].querySelector('img');
       img.src = t.currentSrc || t.src;
@@ -369,33 +499,11 @@
     dlg.querySelector('.lb-close').addEventListener('click', function () { dlg.close(); });
     dlg.querySelector('.lb-prev').addEventListener('click', function () { show(i - 1); });
     dlg.querySelector('.lb-next').addEventListener('click', function () { show(i + 1); });
-    inner.addEventListener('click', function (e) { if (e.target === inner) dlg.close(); });
-    dlg.addEventListener('close', function () { document.documentElement.style.overflow = ''; });
+    dlg.addEventListener('close', function () { resetZoom(); document.documentElement.style.overflow = ''; });
     dlg.addEventListener('keydown', function (e) {
       if (e.key === 'ArrowLeft') show(i - 1);
       if (e.key === 'ArrowRight') show(i + 1);
     });
-    // Balayage à un doigt pour changer de photo.
-    // Les gestes à deux doigts (zoom) et les déplacements sur une page zoomée sont ignorés.
-    var startY = 0;
-    var multi = false;
-    inner.addEventListener('touchstart', function (e) {
-      if (e.touches.length > 1) { multi = true; startX = null; return; }
-      if (!multi) { startX = e.touches[0].clientX; startY = e.touches[0].clientY; }
-    }, { passive: true });
-    inner.addEventListener('touchend', function (e) {
-      if (e.touches.length > 0) return;          // il reste un doigt posé : le geste n'est pas fini
-      var wasMulti = multi;
-      multi = false;
-      var sx = startX;
-      startX = null;
-      if (wasMulti || sx === null) return;
-      if (window.visualViewport && window.visualViewport.scale > 1.05) return;
-      var dx = e.changedTouches[0].clientX - sx;
-      var dy = e.changedTouches[0].clientY - startY;
-      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) show(dx < 0 ? i + 1 : i - 1);
-    }, { passive: true });
-    inner.addEventListener('touchcancel', function () { startX = null; multi = false; }, { passive: true });
   })();
 </script>
 
