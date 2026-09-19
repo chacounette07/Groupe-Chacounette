@@ -59,6 +59,7 @@
     '<div class="pa-actions"><a class="pa-btn" rel="noopener">Télécharger</a>' +
     '<button class="pa-later" type="button">Plus tard</button></div>';
   boite.querySelector('.pa-btn').href = lien || '#';
+  if (/^https?:/.test(lien)) boite.querySelector('.pa-btn').target = '_blank';
 
   function fermer(jours) { masquerPendant(jours); if (boite.parentNode) boite.parentNode.removeChild(boite); }
   boite.querySelector('.pa-x').addEventListener('click', function () { fermer(cfg.rappelJours || 7); });
