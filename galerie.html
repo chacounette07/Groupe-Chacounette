@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Galerie | Chacounette</title>
+<meta name="description" content="Les photos de Chacounette, tigrée grise aux yeux verts.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="index.html">Chacounette</a>
+    <nav aria-label="Navigation principale">
+      <ul>
+        <li class="secondary"><a href="index.html#presentation">Présentation</a></li>
+        <li class="secondary"><a href="index.html#points-forts">Points forts</a></li>
+        <li class="secondary"><a href="index.html#fiche">Fiche technique</a></li>
+        <li><a href="galerie.html" aria-current="page">Galerie</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="page-head">
+    <h1>Galerie</h1>
+    <p class="lead">Chacounette, sous tous les angles.</p>
+    <p class="hint">Touchez ou cliquez sur une photo pour l’agrandir.</p>
+  </section>
+
+  <section class="gallery" aria-label="Photos de Chacounette">
+    <button class="shot" type="button" data-caption="Assise. Elle vous a vue." aria-haspopup="dialog">
+      <img src="IMG_0229.jpeg" alt="Chacounette assise de profil, la tête tournée vers l’objectif, les yeux verts grands ouverts" width="1200" height="1600" decoding="async">
+    </button>
+    <button class="shot" type="button" data-caption="Tête posée. Ne pas bouger." aria-haspopup="dialog">
+      <img src="IMG_0410.jpeg" alt="Chacounette la tête posée sur un genou en jean, le regard tourné sur le côté" width="1800" height="1350" decoding="async">
+    </button>
+    <button class="shot" type="button" data-caption="Yeux fermés. Ne pas déranger." aria-haspopup="dialog">
+      <img src="IMG_0358.jpeg" alt="Chacounette les yeux fermés, blottie dans une couette bleu-vert" width="1800" height="1350" decoding="async">
+    </button>
+    <button class="shot" type="button" data-caption="En observation." aria-haspopup="dialog">
+      <img src="IMG_0019.jpeg" alt="Chacounette debout sur ses pattes arrière, les pattes sur un volet, qui regarde dehors" width="1200" height="1600" loading="lazy" decoding="async">
+    </button>
+    <button class="shot" type="button" data-caption="Expression neutre. Jugement en cours." aria-haspopup="dialog">
+      <img src="IMG_0109.jpeg" alt="Chacounette sur un lit, le regard mi-clos et sévère, les pattes en avant" width="1200" height="1600" loading="lazy" decoding="async">
+    </button>
+    <button class="shot" type="button" data-caption="Toujours sur le même genou." aria-haspopup="dialog">
+      <img src="IMG_0415.jpeg" alt="Chacounette somnolente, la tête posée sur un genou en jean" width="1800" height="1350" loading="lazy" decoding="async">
+    </button>
+    <button class="shot" type="button" data-caption="Le regard vert." aria-haspopup="dialog">
+      <img src="IMG_0421.jpeg" alt="Gros plan sur le visage de Chacounette, tigrée grise aux yeux verts" width="1200" height="1600" loading="lazy" decoding="async">
+    </button>
+    <button class="shot" type="button" data-caption="Gros plan sur le museau." aria-haspopup="dialog">
+      <img class="crop" style="object-position: 50% 57%" src="IMG_0413.jpeg" alt="Gros plan sur le museau de Chacounette endormie, sur du jean" width="1200" height="1600" loading="lazy" decoding="async">
+    </button>
+  </section>
+</main>
+
+<dialog id="lightbox" class="lightbox" aria-label="Photo agrandie">
+  <div class="lb-inner" id="lb-inner">
+    <button class="lb-btn lb-close" type="button" aria-label="Fermer">×</button>
+    <button class="lb-btn lb-prev" type="button" aria-label="Photo précédente">‹</button>
+    <img id="lb-img" alt="">
+    <p class="lb-caption" id="lb-cap"></p>
+    <button class="lb-btn lb-next" type="button" aria-label="Photo suivante">›</button>
+  </div>
+</dialog>
+
+<footer>© 2026 Chacounette. Tous droits réservés, surtout sur le canapé.</footer>
+
+<script>
+  (function () {
+    var shots = Array.prototype.slice.call(document.querySelectorAll('.shot'));
+    var dlg = document.getElementById('lightbox');
+    var inner = document.getElementById('lb-inner');
+    var img = document.getElementById('lb-img');
+    var cap = document.getElementById('lb-cap');
+    var i = 0;
+    var startX = null;
+
+    function show(n) {
+      i = (n + shots.length) % shots.length;
+      var t = shots[i].querySelector('img');
+      img.src = t.currentSrc || t.src;
+      img.alt = t.alt;
+      cap.textContent = shots[i].getAttribute('data-caption');
+    }
+    function open(n) {
+      show(n);
+      document.documentElement.style.overflow = 'hidden';
+      dlg.showModal();
+    }
+
+    shots.forEach(function (s, n) { s.addEventListener('click', function () { open(n); }); });
+    dlg.querySelector('.lb-close').addEventListener('click', function () { dlg.close(); });
+    dlg.querySelector('.lb-prev').addEventListener('click', function () { show(i - 1); });
+    dlg.querySelector('.lb-next').addEventListener('click', function () { show(i + 1); });
+    inner.addEventListener('click', function (e) { if (e.target === inner) dlg.close(); });
+    dlg.addEventListener('close', function () { document.documentElement.style.overflow = ''; });
+    dlg.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowLeft') show(i - 1);
+      if (e.key === 'ArrowRight') show(i + 1);
+    });
+    inner.addEventListener('touchstart', function (e) { startX = e.changedTouches[0].clientX; }, { passive: true });
+    inner.addEventListener('touchend', function (e) {
+      if (startX === null) return;
+      var dx = e.changedTouches[0].clientX - startX;
+      startX = null;
+      if (Math.abs(dx) > 50) show(dx < 0 ? i + 1 : i - 1);
+    }, { passive: true });
+  })();
+</script>
+</body>
+</html>
